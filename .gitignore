@@ -1,0 +1,7 @@
+# compile artifacts and cache
+*.pyc
+__pycache__
+
+# PyCharm artifacts
+
+.idea
