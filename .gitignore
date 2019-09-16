@@ -2,6 +2,8 @@
 *.pyc
 __pycache__
 
-# PyCharm artifacts
+# install artifacts
+*.egg-info/
 
+# PyCharm artifacts
 .idea
