@@ -3,7 +3,7 @@
 import io
 import itertools
 import re
-from typing import List
+from typing import List, Set
 
 import nltk
 
@@ -112,9 +112,9 @@ class NetBuilder:
         regex = '[^A-Za-z0-9]+'
         self.not_alphanum_regex = re.compile(regex)
 
-    def partition_by_sentences(self, text: str) -> List[str]:
+    def partition_text(self, text: str) -> List[List[str]]:
         """input: a piece of text
-        output: list representing the same text without linefeeds
+        output: the same text, tokenized by sentences and words
         the list contains one string per sentence (if the user asked for sentence partitioning)
         or only one string, contaning the whole text"""
 
@@ -124,7 +124,9 @@ class NetBuilder:
             text = nltk.sent_tokenize(text)
         else:
             text = [text]
-        return text
+
+        token_text = [nltk.word_tokenize(sentence) for sentence in text]
+        return token_text
 
     def remove_unwanted_words(self, text: List[str]) -> List[List[str]]:
         """input: a list representing a text split in sentences
@@ -132,16 +134,15 @@ class NetBuilder:
         """
         clean_text = []
         for sentence in text:
-            tokens = nltk.word_tokenize(sentence)  # undo contractions, mainly
             if self.pos_whitelist or self.pos_blacklist:
-                tagged_tokens = nltk.pos_tag(tokens)
+                tagged_tokens = nltk.pos_tag(sentence)
                 if self.pos_whitelist:
                     filtered = filter(lambda x: x[1] in self.pos_whitelist, tagged_tokens)
                 else:
                     filtered = filter(lambda x: x[1] not in self.pos_blacklist, tagged_tokens)
-                tokens = [x[0] for x in filtered]
+                sentence = [x[0] for x in filtered]
             clean_tokens = []
-            for token in tokens:
+            for token in sentence:
                 token = token.lower()  # standardisation
                 token = re.sub(self.not_alphanum_regex, '', token)  # remove numbers and puncts
                 if ((self.whitelist and token in self.whitelist)
@@ -171,8 +172,8 @@ class NetBuilder:
         """input: a piece of text
         output: a list of sentences (lists of strings) cleaned by class params"""
 
-        text = self.partition_by_sentences(text)
-        clean_text = self.remove_unwanted_words(text)
+        tokenised_text = self.partition_text(text)
+        clean_text = self.remove_unwanted_words(tokenised_text)
         if self.top_words:
             clean_text = self.filter_frequent_words(clean_text, int(self.top_words))
         return clean_text
