@@ -3,6 +3,7 @@
 import io
 import itertools
 import re
+from typing import List
 
 import nltk
 
@@ -111,16 +112,24 @@ class NetBuilder:
         regex = '[^A-Za-z0-9]+'
         self.not_alphanum_regex = re.compile(regex)
 
-    def build_network(self, text):
+    def partition_by_sentences(self, text: str) -> List[str]:
+        """input: a piece of text
+        output: list representing the same text without linefeeds
+        the list contains one string per sentence (if the user asked for sentence partitioning)
+        or only one string, contaning the whole text"""
+
         text = text.strip().replace('\n', ' ')
 
         if self.sentence_partitioning:
             text = nltk.sent_tokenize(text)
         else:
             text = [text]
+        return text
 
-        # text preparation
-
+    def remove_unwanted_words(self, text: List[str]) -> List[List[str]]:
+        """input: a list representing a text split in sentences
+        output: a list of lists of clean tokens, filtered by what the user wants to keep
+        """
         clean_text = []
         for sentence in text:
             tokens = nltk.word_tokenize(sentence)  # undo contractions, mainly
@@ -140,23 +149,37 @@ class NetBuilder:
                     token = self.stemmer.stem(token)
                     clean_tokens.append(token)
             clean_text.append(clean_tokens)
+        return clean_text
 
+    def filter_frequent_words(self, clean_text: List[List[str]], frequency: int) -> List[List[str]]:
+        """input: a list representing a text split in sentences
+        output: a list of sentences, keeping only the N most frequent words"""
+
+        distribution = nltk.probability.FreqDist(
+            [word for sentence in clean_text for word in sentence],
+        )
+        most_frequent = [token for token, _ in distribution.most_common(frequency)]
+
+        new_clean_text = []
+        for sentence in clean_text:
+            sentence = [word for word in sentence if word in most_frequent]
+            if sentence:
+                new_clean_text.append(sentence)
+        return new_clean_text
+
+    def clean_text(self, text: str) -> List[List[str]]:
+        """input: a piece of text
+        output: a list of sentences (lists of strings) cleaned by class params"""
+
+        text = self.partition_by_sentences(text)
+        clean_text = self.remove_unwanted_words(text)
         if self.top_words:
-            distribution = nltk.probability.FreqDist(
-                [word for sentence in clean_text for word in sentence],
-            )
-            most_frequent = [token for token, _ in distribution.most_common(int(self.top_words))]
+            clean_text = self.filter_frequent_words(clean_text, int(self.top_words))
+        return clean_text
 
-            new_clean_text = []
-            for sentence in clean_text:
-                sentence = [word for word in sentence if word in most_frequent]
-                if sentence:
-                    new_clean_text.append(sentence)
+    def build_network(self, text):
 
-            clean_text = new_clean_text
-
-        # building the network
-
+        clean_text = self.clean_text(text)
         edges = {}
 
         if self.criterion == 'distance1':
