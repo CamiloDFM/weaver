@@ -5,6 +5,7 @@ import io
 
 from weaver.wordnet import NetBuilder
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -120,7 +121,9 @@ def main():
 
     from_line = 0 if args.from_line == 0 else args.from_line - 1
     to_line = args.to_line
-    vertices, edges, weights = network_builder.build_network('\n'.join(text_lines[from_line:to_line]))
+    vertices, edges, weights = network_builder.build_network(
+        '\n'.join(text_lines[from_line:to_line]),
+    )
 
     with io.open(args.output_path, 'w', encoding='utf-8') as out_stream:
         out_stream.write(f'*Vertices {len(vertices)}\n')
