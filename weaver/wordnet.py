@@ -46,6 +46,16 @@ def set_value_in_dict(input_dict, index1, index2, value):
     return None
 
 
+def filter_token_by_pos_tag(tagged_tokens, false_positives, tags_to_replace, replacement_tag):
+    """auxiliar generator that allows to force a certain subset of
+    pos-tagged tokens to take in a specific pos tag"""
+    for token, tag in tagged_tokens:
+        if tag in tags_to_replace and token.lower() in false_positives:
+            yield (token, replacement_tag)
+        else:
+            yield (token, tag)
+
+
 class NetBuilder:
     def __init__(
             self,
@@ -112,6 +122,34 @@ class NetBuilder:
         regex = '[^A-Za-z0-9]+'
         self.not_alphanum_regex = re.compile(regex)
 
+    @staticmethod
+    def search_for_pos_tagger_proper_noun_false_positives(text: List[List[str]]) -> Set[str]:
+        """input: list of tokenised sentences
+        output: set containing all the words that start sentences
+        and appear somewhere else in the text without caps
+        This is important because the default NLTK POS tagger (averaged_perceptron_tagger)
+        mistakenly tags these as NNP"""
+
+        # Words that start a sentence and for which we haven't found another non-sentence-starting
+        # instance that doesn't start with caps
+        candidates = set()
+        # Words that don't start with caps somewhere else in the text
+        false_positives = set()
+
+        for sentence in text:
+            if sentence[0][0].isupper() and sentence[0].lower() not in false_positives:
+                candidates.add(sentence[0].lower())
+        for sentence in text:
+            to_remove = set()
+            for word in sentence:
+                if word in candidates:
+                    false_positives.add(word)
+                    to_remove.add(word)
+            for word in to_remove:
+                candidates.remove(word)
+
+        return false_positives
+
     def partition_text(self, text: str) -> List[List[str]]:
         """input: a piece of text
         output: the same text, tokenized by sentences and words
@@ -128,14 +166,32 @@ class NetBuilder:
         token_text = [nltk.word_tokenize(sentence) for sentence in text]
         return token_text
 
-    def remove_unwanted_words(self, text: List[str]) -> List[List[str]]:
+    def remove_unwanted_words(self, text: List[List[str]]) -> List[List[str]]:
         """input: a list representing a text split in sentences
         output: a list of lists of clean tokens, filtered by what the user wants to keep
         """
+
+        if self.pos_whitelist or self.pos_blacklist:
+            if self.sentence_partitioning:
+                # input is already a list of sentences
+                tokenized_sentences = text
+            else:
+                # sent tokenise the list before searching for false positives
+                joined = ' '.join(text[0])
+                sentences = nltk.sent_tokenize(joined)
+                tokenized_sentences = [nltk.word_tokenize(sentence) for sentence in sentences]
+            false_positives = self.search_for_pos_tagger_proper_noun_false_positives(tokenized_sentences)  # noqa: E501
+
         clean_text = []
         for sentence in text:
             if self.pos_whitelist or self.pos_blacklist:
                 tagged_tokens = nltk.pos_tag(sentence)
+                tagged_tokens = filter_token_by_pos_tag(
+                    tagged_tokens,
+                    false_positives,
+                    ('NNP', 'NNPS'),
+                    'NN',
+                )
                 if self.pos_whitelist:
                     filtered = filter(lambda x: x[1] in self.pos_whitelist, tagged_tokens)
                 else:
